@@ -6,32 +6,42 @@ const COKE_ID = 642;
 const CROISSANT_ID = 532;
 const COFFEE_ID = 641;
 
+//Helper function for inventory management
+const getTotalQuantity = (cart, productId) => {
+    return cart.reduce((total, item) =>
+        item.id === productId ? total + item.quantity : total,
+        0
+    );
+};
+
 export function CartProvider({ children }) {
     const [cart, setCart] = useState([]);
     const [wishlist, setWishlist] = useState([]);
 
     const addToCart = (product) => {
         setCart(prevCart => {
+            // Check total quantity including free items
+            const totalQuantity = getTotalQuantity(prevCart, product.id);
+            if (totalQuantity >= product.available) return prevCart;
+
             // Find existing non-free item
             const existingItem = prevCart.find(item =>
                 item.id === product.id && !item.isFree
             );
 
             if (existingItem) {
-                if (existingItem.quantity >= product.available) return prevCart;
-
                 const newCart = prevCart.map(item =>
                     item.id === product.id && !item.isFree
                         ? { ...item, quantity: item.quantity + 1 }
                         : item
                 );
 
-                return applyOffers(newCart);
+                return applyOffers(newCart, product.available);
             }
 
             // Add new item
             const newCart = [...prevCart, { ...product, quantity: 1 }];
-            return applyOffers(newCart);
+            return applyOffers(newCart, product.available);
         });
     };
 
@@ -49,7 +59,7 @@ export function CartProvider({ children }) {
                         : cartItem
                 );
             } else {
-                newCart = prevCart.filter(cartItem => 
+                newCart = prevCart.filter(cartItem =>
                     cartItem.id !== productId || cartItem.isFree
                 );
             }
@@ -63,21 +73,30 @@ export function CartProvider({ children }) {
             removeFromCart(productId);
             return;
         }
-
+    
         setCart(prevCart => {
             // Find the item but specifically check if it's not a free item
             const item = prevCart.find(item => item.id === productId && !item.isFree);
             
-            // If item not found or it's a free item or exceeds available quantity, return unchanged
-            if (!item || newQuantity > item.available) return prevCart;
-
+            if (!item) return prevCart;
+    
+            // For Coca-Cola, check total quantity including potential free items
+            if (productId === COKE_ID) {
+                const freeCokes = Math.floor(newQuantity / 6);
+                const totalQuantity = newQuantity + freeCokes;
+                if (totalQuantity > 10) return prevCart;
+            } else {
+                // For other items, check just the new quantity
+                if (newQuantity > item.available) return prevCart;
+            }
+    
             // Update quantity only for non-free items
-            const newCart = prevCart.map(cartItem => 
+            const newCart = prevCart.map(cartItem =>
                 cartItem.id === productId && !cartItem.isFree
                     ? { ...cartItem, quantity: newQuantity }
                     : cartItem
             );
-
+    
             // Apply offers after updating the quantity
             return applyOffers(newCart);
         });
@@ -109,16 +128,21 @@ export function CartProvider({ children }) {
         }
     };
 
-    const applyOffers = (cart) => {
+    const applyOffers = (cart, availableInventory) => {
         let updatedCart = [...cart];
-    
+
         // Handle Coca-Cola offer
         const cokeItem = updatedCart.find(item => item.id === COKE_ID && !item.isFree);
         if (cokeItem) {
-            const freeCokes = Math.floor(cokeItem.quantity / 6);
+            // Remove any existing free cokes
             updatedCart = updatedCart.filter(item => !(item.id === COKE_ID && item.isFree));
-            
-            if (freeCokes > 0) {
+
+            const freeCokes = Math.floor(cokeItem.quantity / 6);
+            // Calculate total items (purchased + potential free)
+            const totalItems = cokeItem.quantity + freeCokes;
+
+            // Only add free cokes if we're within inventory limit
+            if (freeCokes > 0 && totalItems <= 10) {
                 updatedCart.push({
                     ...cokeItem,
                     name: 'Coca-Cola (Free with every 6)',
@@ -128,14 +152,19 @@ export function CartProvider({ children }) {
                 });
             }
         }
-    
+
         // Handle Croissant offer
         const croissantItem = updatedCart.find(item => item.id === CROISSANT_ID);
-        // First, remove any existing free coffees
+        // Remove any existing free coffees before calculating new ones
         updatedCart = updatedCart.filter(item => !(item.id === COFFEE_ID && item.isFree));
-        
+
         if (croissantItem && croissantItem.quantity >= 3) {
-            const freeCoffees = Math.floor(croissantItem.quantity / 3);
+            const totalCoffeeQuantity = getTotalQuantity(updatedCart, COFFEE_ID);
+            const maxFreeCoffees = Math.min(
+                Math.floor(croissantItem.quantity / 3),  // Free coffees from offer rule
+                10 - totalCoffeeQuantity                 // Available inventory limit
+            );
+
             const coffeeReference = updatedCart.find(item => item.id === COFFEE_ID && !item.isFree) || {
                 id: COFFEE_ID,
                 name: 'Coffee (Free with 3 Croissants)',
@@ -143,18 +172,18 @@ export function CartProvider({ children }) {
                 price: '£0.00',
                 isFree: true
             };
-    
-            if (freeCoffees > 0) {
+
+            if (maxFreeCoffees > 0) {
                 updatedCart.push({
                     ...coffeeReference,
                     name: 'Coffee (Free with 3 Croissants)',
-                    quantity: freeCoffees,
+                    quantity: maxFreeCoffees,
                     isFree: true,
                     price: '£0.00'
                 });
             }
         }
-    
+
         return updatedCart;
     };
 
