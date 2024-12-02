@@ -2,23 +2,9 @@ import { createContext, useContext, useState } from 'react';
 
 const CartContext = createContext();
 
-// Product and Offer Constants
-const PRODUCT_IDS = {
-    COKE: 642,
-    CROISSANT: 532,
-    COFFEE: 641
-};
-
-const OFFERS = {
-    COKE: {
-        requiredQuantity: 6,
-        freeName: 'Coca-Cola (Free with every 6)'
-    },
-    CROISSANT: {
-        requiredQuantity: 3,
-        freeName: 'Coffee (Free with 3 Croissants)'
-    }
-};
+const COKE_ID = 642;
+const CROISSANT_ID = 532;
+const COFFEE_ID = 641;
 
 //Helper function for inventory management
 const getTotalQuantity = (cart, productId) => {
@@ -50,12 +36,12 @@ export function CartProvider({ children }) {
                         : item
                 );
 
-                return applyOffers(newCart);
+                return applyOffers(newCart, product.available);
             }
 
             // Add new item
             const newCart = [...prevCart, { ...product, quantity: 1 }];
-            return applyOffers(newCart);
+            return applyOffers(newCart, product.available);
         });
     };
 
@@ -95,10 +81,10 @@ export function CartProvider({ children }) {
             if (!item) return prevCart;
     
             // For Coca-Cola, check total quantity including potential free items
-            if (productId === PRODUCT_IDS.COKE) {
-                const freeCokes = Math.floor(newQuantity / OFFERS.COKE.requiredQuantity);
+            if (productId === COKE_ID) {
+                const freeCokes = Math.floor(newQuantity / 6);
                 const totalQuantity = newQuantity + freeCokes;
-                if (totalQuantity > item.available) return prevCart;
+                if (totalQuantity > 10) return prevCart;
             } else {
                 // For other items, check just the new quantity
                 if (newQuantity > item.available) return prevCart;
@@ -142,24 +128,24 @@ export function CartProvider({ children }) {
         }
     };
 
-    const applyOffers = (cart) => {
+    const applyOffers = (cart, availableInventory) => {
         let updatedCart = [...cart];
 
         // Handle Coca-Cola offer
-        const cokeItem = updatedCart.find(item => item.id === PRODUCT_IDS.COKE && !item.isFree);
+        const cokeItem = updatedCart.find(item => item.id === COKE_ID && !item.isFree);
         if (cokeItem) {
             // Remove any existing free cokes
-            updatedCart = updatedCart.filter(item => !(item.id === PRODUCT_IDS.COKE && item.isFree));
+            updatedCart = updatedCart.filter(item => !(item.id === COKE_ID && item.isFree));
 
-            const freeCokes = Math.floor(cokeItem.quantity / OFFERS.COKE.requiredQuantity);
+            const freeCokes = Math.floor(cokeItem.quantity / 6);
             // Calculate total items (purchased + potential free)
             const totalItems = cokeItem.quantity + freeCokes;
 
             // Only add free cokes if we're within inventory limit
-            if (freeCokes > 0 && totalItems <= cokeItem.available) {
+            if (freeCokes > 0 && totalItems <= 10) {
                 updatedCart.push({
                     ...cokeItem,
-                    name: OFFERS.COKE.freeName,
+                    name: 'Coca-Cola (Free with every 6)',
                     quantity: freeCokes,
                     isFree: true,
                     price: '£0.00'
@@ -168,26 +154,20 @@ export function CartProvider({ children }) {
         }
 
         // Handle Croissant offer
-        const croissantItem = updatedCart.find(item => item.id === PRODUCT_IDS.CROISSANT);
+        const croissantItem = updatedCart.find(item => item.id === CROISSANT_ID);
         // Remove any existing free coffees before calculating new ones
-        updatedCart = updatedCart.filter(item => !(item.id === PRODUCT_IDS.COFFEE && item.isFree));
+        updatedCart = updatedCart.filter(item => !(item.id === COFFEE_ID && item.isFree));
 
-        if (croissantItem && croissantItem.quantity >= OFFERS.CROISSANT.requiredQuantity) {
-            const coffeeInCart = updatedCart.find(item => 
-                item.id === PRODUCT_IDS.COFFEE && !item.isFree
-            );
-            
-            const totalCoffeeQuantity = getTotalQuantity(updatedCart, PRODUCT_IDS.COFFEE);
-            const availableCoffeeStock = coffeeInCart ? coffeeInCart.available : 0;
-            
+        if (croissantItem && croissantItem.quantity >= 3) {
+            const totalCoffeeQuantity = getTotalQuantity(updatedCart, COFFEE_ID);
             const maxFreeCoffees = Math.min(
-                Math.floor(croissantItem.quantity / OFFERS.CROISSANT.requiredQuantity),  // Free coffees from offer rule
-                availableCoffeeStock - totalCoffeeQuantity  // Available inventory limit
+                Math.floor(croissantItem.quantity / 3),  // Free coffees from offer rule
+                10 - totalCoffeeQuantity                 // Available inventory limit
             );
 
-            const coffeeReference = coffeeInCart || {
-                id: PRODUCT_IDS.COFFEE,
-                name: OFFERS.CROISSANT.freeName,
+            const coffeeReference = updatedCart.find(item => item.id === COFFEE_ID && !item.isFree) || {
+                id: COFFEE_ID,
+                name: 'Coffee (Free with 3 Croissants)',
                 img: 'https://py-shopping-cart.s3.eu-west-2.amazonaws.com/coffee.jpeg',
                 price: '£0.00',
                 isFree: true
@@ -196,7 +176,7 @@ export function CartProvider({ children }) {
             if (maxFreeCoffees > 0) {
                 updatedCart.push({
                     ...coffeeReference,
-                    name: OFFERS.CROISSANT.freeName,
+                    name: 'Coffee (Free with 3 Croissants)',
                     quantity: maxFreeCoffees,
                     isFree: true,
                     price: '£0.00'
