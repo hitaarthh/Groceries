@@ -8,6 +8,17 @@ export default function ProductCard({ product }) {
   const cartItem = cart.find(item => item.id === product.id && !item.isFree);
   const inWishlist = isInWishlist(product.id);
 
+  // Calculate remaining inventory considering cart items and free items
+  const getRemainingInventory = () => {
+    const totalInCart = cart.reduce((total, item) => 
+      item.id === product.id ? total + item.quantity : total, 
+      0
+    );
+    return product.available - totalInCart;
+  };
+
+  const remainingInventory = getRemainingInventory();
+
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <img 
@@ -20,9 +31,13 @@ export default function ProductCard({ product }) {
         <h3 className="font-semibold text-lg">{product.name}</h3>
         <p className="text-gray-500 text-sm">{product.description}</p>
         
-        {product.available < 10 ? (
+        {remainingInventory <= 0 ? (
+          <span className="inline-block bg-red-100 text-red-600 px-3 py-1 rounded-full text-sm">
+            Out of stock
+          </span>
+        ) : remainingInventory < 10 ? (
           <span className="inline-block bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-sm">
-            Only {product.available} left
+            Only {remainingInventory} left
           </span>
         ) : (
           <span className="inline-block bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm">
@@ -38,7 +53,7 @@ export default function ProductCard({ product }) {
                 <button 
                   onClick={() => removeFromCart(product.id)}
                   className="p-1 hover:bg-gray-200 rounded"
-                  disabled={product.available === 0}
+                  disabled={remainingInventory === product.available}
                 >
                   <MinusIcon className="w-5 h-5" />
                 </button>
@@ -48,7 +63,7 @@ export default function ProductCard({ product }) {
                 <button 
                   onClick={() => addToCart(product)}
                   className="p-1 hover:bg-gray-200 rounded"
-                  disabled={cartItem.quantity >= product.available}
+                  disabled={remainingInventory <= 0}
                 >
                   <PlusIcon className="w-5 h-5" />
                 </button>
@@ -57,7 +72,7 @@ export default function ProductCard({ product }) {
               <button 
                 onClick={() => addToCart(product)}
                 className="p-2 hover:bg-gray-100 rounded-lg"
-                disabled={product.available === 0}
+                disabled={remainingInventory <= 0}
               >
                 <ShoppingCartIcon className="w-6 h-6" />
               </button>
